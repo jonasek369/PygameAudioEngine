@@ -16,7 +16,7 @@ sound_effect_sound = mixer.Sound("KILLKA.ogg")
 ae.add_preloaded(sound_effect, sound_effect_sound)
 
 # if you're using this with pygame create your screen before ae.start() there's some weird bug so that pygame window won't show
-# until like 10-15 seconds so...
+# until like 10-15 seconds later
 
 screen = pygame.display.set_mode((1280, 720))
 
