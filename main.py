@@ -1,16 +1,11 @@
-import logging
 import math
 import threading
-import time
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import List
 from uuid import uuid4
 
-import pygame
 from pygame import mixer
-
-logging.basicConfig(level=logging.INFO)
 
 
 class SoundState(Enum):
@@ -24,9 +19,9 @@ class SoundState(Enum):
 @dataclass
 class Audio:
     AudioPath: str
-    Volume: float  # 0 to 1
+    Volume: float  # 0.0 to 1.0
 
-    Position: [int, int]
+    Position: List
     # in units same as position
     AudioRange: float
     Channel: mixer.Channel = None
@@ -41,10 +36,18 @@ class Audio:
         return self._CHANNEL_VOLUME_SET
 
 
+@dataclass
+class ChangePositionCommand:
+    TargetUuid: str
+    NewPosition: List
+
+
 CHANNEL_ADDER = 4
+
 
 def percentage(whole, percts):
     return (whole / 100) * percts
+
 
 def get_percentage(whole, number):
     return number / (whole / 100)
@@ -57,51 +60,70 @@ class AudioEngine2D:
         self.sounds: List[Audio] = []
         self.__running = False
         self.__listener_position = [0, 0]
-        self.__to_pause: List[mixer.Channel] = []
-        self.__to_unpause: List[mixer.Channel] = []
+        self.__to_pause: List[str] = []
+        self.__to_unpause: List[str] = []
+        self.__change_pos: List[ChangePositionCommand] = []
         self.MAX_CHANNELS = max_channels
         mixer.pre_init(44100, -16, 2, 4096)
         mixer.init()
         mixer.set_num_channels(self.MAX_CHANNELS)
 
+    # start the main function in thread so you can do anything on the main one
     def start(self):
         self.__running = True
-        t = threading.Thread(target=self.update)
-        t.start()
+        threading.Thread(target=self.update).start()
 
+    # stops the self.update function and the thread
     def stop(self):
         self.__running = False
 
+    # Sets the position of listener (player)
     def set_listener_position(self, position):
         self.__listener_position = position
 
+    # Logarithmic graph function for getting volume
     def distance_to_sound(self, distance, maxdistance):
         return 1 - (19 / 20) * math.log(distance / maxdistance + 0.1, 10)
 
+    # gets the distance between 2 points (Lists of 2 numbers)
     def distance(self, d1, d2):
         return math.sqrt((d2[0] - d1[0]) ** 2 + (d2[1] - d1[1]) ** 2)
 
+    # main function for managing and playing all the audios
     def update(self):
         while self.__running:
             for audio in self.sounds.copy():
-                # Pause / Unpause
-                for paused_channel in self.__to_pause.copy():
-                    if paused_channel == audio.Channel:
+                # Change sound position
+                for cpc in self.__change_pos.copy():
+                    cpc_index = self.__change_pos.index(cpc)
+                    if cpc.TargetUuid == audio.Uuid:
+                        audio.Position = cpc.NewPosition
+                        self.__change_pos.pop(cpc_index)
+                        break
+
+                # Pause
+                for paused_uuid in self.__to_pause.copy():
+                    if paused_uuid == audio.Uuid:
                         audio.Status = SoundState.Paused
                         audio.Channel.pause()
-                        self.__to_pause.pop(self.__to_pause.index(paused_channel))
-                        logging.info(f" Paused {audio.AudioPath}")
-                for unpaused_channel in self.__to_unpause:
-                    if unpaused_channel == audio.Channel:
+                        self.__to_pause.pop(self.__to_pause.index(paused_uuid))
+                        break
+
+                # Unpause
+                for unpaused_uuid in self.__to_unpause:
+                    if unpaused_uuid == audio.Uuid:
                         audio.Status = SoundState.Playing
                         audio.Channel.unpause()
-                        self.__to_unpause.pop(self.__to_unpause.index(unpaused_channel))
-                        logging.info(f" Unpaused {audio.AudioPath}")
+                        self.__to_unpause.pop(self.__to_unpause.index(unpaused_uuid))
+                        break
 
                 if audio.Channel is not None:
+                    # Set volume
                     if audio.Volume != audio.get_channel_vol():
                         audio.Channel.set_volume(audio.Volume)
                         audio.set_channel_vol(audio.Volume)
+
+                    # Changing volume base on user distance and sound distance
                     if audio.Channel.get_busy():
                         audio_pos = audio.Position
                         listener_pos = self.__listener_position
@@ -114,27 +136,33 @@ class AudioEngine2D:
                         perc = get_percentage(1.0, volume)
                         conv = percentage(audio.Volume, perc)
                         audio.Channel.set_volume(conv)
-                        #logging.info(f" {conv}")
                         continue
+
+                    # If sound finished dispose
                     if not audio.Channel.get_busy() and audio.Status == SoundState.Playing:
                         audio.Status = SoundState.Finished
                         self.sounds.pop(self.sounds.index(audio))
-                        logging.info(f"Disposing {audio.AudioPath}")
                         continue
-                load = mixer.Sound(audio.AudioPath)
-                print(load)
+
+                # If sound is not playing load up audio and find channel for it
+                load = self.loaded[audio.AudioPath]
                 channel = mixer.find_channel()
+
+                # Not sure if this actually works but if there are not enough channels to play a sound
+                # Add new based on CHANNEL_ADDER
                 if channel is None:
                     self.MAX_CHANNELS += CHANNEL_ADDER
                     mixer.set_num_channels(self.MAX_CHANNELS)
                     channel = mixer.find_channel()
-                    logging.info(f"raising the maximum of channels to {self.MAX_CHANNELS}")
+
+                # Start the sound
                 audio.Channel = channel
                 audio.Status = SoundState.Playing
                 channel.play(load)
                 channel.set_volume(audio.Volume)
                 audio._CHANNEL_VOLUME_SET = audio.Volume
 
+    # Get all playing sounds as list of Audio class
     def get_playing(self) -> List[Audio]:
         audios = []
         for audio in self.sounds:
@@ -142,40 +170,44 @@ class AudioEngine2D:
                 audios.append(audio)
         return audios
 
-    def pause(self, channel: mixer.Channel):
-        self.__to_pause.append(channel)
+    def pause(self, uuid: str):
+        self.__to_pause.append(uuid)
 
-    def unpause(self, channel: mixer.Channel):
-        self.__to_unpause.append(channel)
+    def unpause(self, uuid: str):
+        self.__to_unpause.append(uuid)
 
-    def remove_song(self, aud: Audio or mixer.Channel):
+    # removes song from list
+    def remove_song(self, uuid: str):
         try:
-            if isinstance(aud, Audio):
-                chan = aud.Channel
-                if chan is None:
-                    logging.warning(f"Channel is not set in audio")
-                    self.sounds.pop(self.sounds.index(aud))
-                    return
-                chan.stop()
-            else:
-                chan = aud
-                chan.stop()
-                for audio in self.sounds.copy():
-                    if audio.Channel == chan:
-                        self.sounds.pop(self.sounds.index(audio))
-                        break
+            for audio in self.sounds.copy():
+                if uuid == audio.Uuid:
+                    self.sounds.pop(self.sounds.index(audio))
+                    break
         except ValueError:
-            logging.warning(f"Could not find this audio")
+            print(f"Could not find this audio")
 
+    # This function loads up the sound file and saves it for later use, saves audio to sounds so self.update can use it
     def add(self, audio: Audio):
+        self.loaded[audio.AudioPath] = mixer.Sound(audio.AudioPath)
         self.sounds.append(audio)
 
-    def get_channel_by_name(self, playing_name) -> mixer.Channel:
+    # This function just saves the provided mixer.Sound and saves the audio so self.update can use it
+    def add_preloaded(self, audio: Audio, sound: mixer.Sound):
+        self.loaded[audio.AudioPath] = sound
+        self.sounds.append(audio)
+
+    # This should not be relied upon because it searches through the AudioPath so it can find false things
+    def get_uuid_by_name(self, playing_name) -> str:
         for audio in self.sounds:
             if playing_name in audio.AudioPath.lower():
-                return audio.Channel
+                return audio.Uuid
 
+    # This should not be relied upon because it searches through the AudioPath so it can find false things
     def get_audio_by_name(self, playing_name) -> Audio:
         for audio in self.sounds:
             if playing_name in audio.AudioPath.lower():
                 return audio
+
+    # This makes ChangePositionCommand and saves so self.update can process it
+    def set_audio_position(self, uuid: str, new_pos):
+        self.__change_pos.append(ChangePositionCommand(uuid, new_pos))
