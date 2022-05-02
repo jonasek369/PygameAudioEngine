@@ -12,7 +12,7 @@ ae = AudioEngine2D()
             # Filepath, volume, Sound Position, Sound range
 sound_effect = Audio("sfx.ogg", 0.05, [200, 200], 20)
 # for preloaded sound just make a mixer.Sound and save it with special function
-sound_effect_sound = mixer.Sound("KILLKA.ogg")
+sound_effect_sound = mixer.Sound("sfx.ogg")
 
 # ae.add(sound_effect) to do this automatically
 
