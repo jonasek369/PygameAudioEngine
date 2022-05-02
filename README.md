@@ -3,6 +3,7 @@ Just a wrapper for pygame mixer adding 2D audio with distance dropoff
  
 ```py
 from main import AudioEngine2D, Audio
+import pygame
 
 ae = AudioEngine2D()
             # Filepath, volume, Sound Position, Sound range
