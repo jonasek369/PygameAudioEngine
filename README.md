@@ -1,6 +1,7 @@
 # PygameAudioEngine
 [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/jonasek369/PygameAudioEngine.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jonasek369/PygameAudioEngine/context:python)
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/jonasek369/PygameAudioEngine.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jonasek369/PygameAudioEngine/alerts/) 
+
 Just a wrapper for pygame mixer adding 2D audio with distance dropoff
  
 ```py
