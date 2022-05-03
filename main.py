@@ -45,14 +45,6 @@ class ChangePositionCommand:
 CHANNEL_ADDER = 4
 
 
-def percentage(whole, percts):
-    return (whole / 100) * percts
-
-
-def get_percentage(whole, number):
-    return number / (whole / 100)
-
-
 class AudioEngine2D:
     def __init__(self, max_channels=32):
         self.uuid = str(uuid4())
@@ -64,6 +56,8 @@ class AudioEngine2D:
         self.__to_unpause: List[str] = []
         self.__change_pos: List[ChangePositionCommand] = []
         self.MAX_CHANNELS = max_channels
+        #  you can chose if you want 2D audio
+        self.AUDIO_2D = True
         mixer.pre_init(44100, -16, 2, 4096)
         mixer.init()
         mixer.set_num_channels(self.MAX_CHANNELS)
@@ -81,13 +75,26 @@ class AudioEngine2D:
     def set_listener_position(self, position):
         self.__listener_position = position
 
+    # STATIC METHODS
+    # I just wanted to be in the class so it wont litter the namespace if you import *
+
     # Logarithmic graph function for getting volume
-    def distance_to_sound(self, distance, maxdistance):
+    @staticmethod
+    def distance_to_sound(distance, maxdistance):
         return 1 - (19 / 20) * math.log(distance / maxdistance + 0.1, 10)
 
-    # gets the distance between 2 points (Lists of 2 numbers)
-    def distance(self, d1, d2):
+    # gets the distance between 2 points (params are Lists of 2 numbers)
+    @staticmethod
+    def distance(d1, d2):
         return math.sqrt((d2[0] - d1[0]) ** 2 + (d2[1] - d1[1]) ** 2)
+
+    @staticmethod
+    def percentage(whole, percts):
+        return (whole / 100) * percts
+
+    @staticmethod
+    def get_percentage(whole, number):
+        return number / (whole / 100)
 
     # main function for managing and playing all the audios
     def update(self):
@@ -125,6 +132,8 @@ class AudioEngine2D:
 
                     # Changing volume base on user distance and sound distance
                     if audio.Channel.get_busy():
+                        if not self.AUDIO_2D:
+                            continue
                         audio_pos = audio.Position
                         listener_pos = self.__listener_position
                         dist = self.distance(audio_pos, listener_pos)
@@ -133,8 +142,8 @@ class AudioEngine2D:
                         volume = self.distance_to_sound(dist, audio.AudioRange)
                         if volume < 0:
                             volume = 0
-                        perc = get_percentage(1.0, volume)
-                        conv = percentage(audio.Volume, perc)
+                        perc = self.get_percentage(1.0, volume)
+                        conv = self.percentage(audio.Volume, perc)
                         audio.Channel.set_volume(conv)
                         continue
 
@@ -197,15 +206,15 @@ class AudioEngine2D:
         self.sounds.append(audio)
 
     # This should not be relied upon because it searches through the AudioPath so it can find false things
-    def get_uuid_by_name(self, playing_name) -> str:
+    def get_uuid(self, song_name) -> str:
         for audio in self.sounds:
-            if playing_name in audio.AudioPath.lower():
+            if song_name in audio.AudioPath.lower():
                 return audio.Uuid
 
     # This should not be relied upon because it searches through the AudioPath so it can find false things
-    def get_audio_by_name(self, playing_name) -> Audio:
+    def get_audio(self, song_name) -> Audio:
         for audio in self.sounds:
-            if playing_name in audio.AudioPath.lower():
+            if song_name in audio.AudioPath.lower():
                 return audio
 
     # This makes ChangePositionCommand and saves so self.update can process it
