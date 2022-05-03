@@ -190,6 +190,7 @@ class AudioEngine2D:
         try:
             for audio in self.sounds.copy():
                 if uuid == audio.Uuid:
+                    audio.Channel.stop()
                     self.sounds.pop(self.sounds.index(audio))
                     break
         except ValueError:
