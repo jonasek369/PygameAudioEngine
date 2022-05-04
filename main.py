@@ -42,9 +42,6 @@ class ChangePositionCommand:
     NewPosition: List
 
 
-CHANNEL_ADDER = 4
-
-
 class AudioEngine2D:
     def __init__(self, max_channels=32):
         self.uuid = str(uuid4())
@@ -56,6 +53,7 @@ class AudioEngine2D:
         self.__to_unpause: List[str] = []
         self.__change_pos: List[ChangePositionCommand] = []
         self.MAX_CHANNELS = max_channels
+        self.CHANNEL_ADDER = 4
         #  you can chose if you want 2D audio
         self.AUDIO_2D = True
         mixer.pre_init(44100, -16, 2, 4096)
@@ -130,6 +128,12 @@ class AudioEngine2D:
                         audio.Channel.set_volume(audio.Volume)
                         audio.set_channel_vol(audio.Volume)
 
+                    # If sound finished dispose
+                    if not audio.Channel.get_busy() and audio.Status == SoundState.Playing:
+                        audio.Status = SoundState.Finished
+                        self.sounds.pop(self.sounds.index(audio))
+                        continue
+
                     # Changing volume base on user distance and sound distance
                     if audio.Channel.get_busy():
                         if not self.AUDIO_2D:
@@ -147,12 +151,6 @@ class AudioEngine2D:
                         audio.Channel.set_volume(conv)
                         continue
 
-                    # If sound finished dispose
-                    if not audio.Channel.get_busy() and audio.Status == SoundState.Playing:
-                        audio.Status = SoundState.Finished
-                        self.sounds.pop(self.sounds.index(audio))
-                        continue
-
                 # If sound is not playing load up audio and find channel for it
                 load = self.loaded[audio.AudioPath]
                 channel = mixer.find_channel()
@@ -160,7 +158,7 @@ class AudioEngine2D:
                 # Not sure if this actually works but if there are not enough channels to play a sound
                 # Add new based on CHANNEL_ADDER
                 if channel is None:
-                    self.MAX_CHANNELS += CHANNEL_ADDER
+                    self.MAX_CHANNELS += self.CHANNEL_ADDER
                     mixer.set_num_channels(self.MAX_CHANNELS)
                     channel = mixer.find_channel()
 
