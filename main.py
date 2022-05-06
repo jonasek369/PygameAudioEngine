@@ -24,6 +24,7 @@ class Audio:
     Position: List
     # in units same as position
     AudioRange: float
+    Sound: mixer.Sound
     Channel: mixer.Channel = None
     Status: SoundState = SoundState.Waiting
     Uuid = str(uuid4())
@@ -45,7 +46,6 @@ class ChangePositionCommand:
 class AudioEngine2D:
     def __init__(self, max_channels=32):
         self.uuid = str(uuid4())
-        self.loaded = {}
         self.sounds: List[Audio] = []
         self.__running = False
         self.__listener_position = [0, 0]
@@ -61,12 +61,12 @@ class AudioEngine2D:
         mixer.set_num_channels(self.MAX_CHANNELS)
 
     # start the main function in thread so you can do anything on the main one
-    def start(self):
+    def start_engine(self):
         self.__running = True
         threading.Thread(target=self.update).start()
 
     # stops the self.update function and the thread
-    def stop(self):
+    def stop_engine(self):
         self.__running = False
 
     # Sets the position of listener (player)
@@ -152,7 +152,7 @@ class AudioEngine2D:
                         continue
 
                 # If sound is not playing load up audio and find channel for it
-                load = self.loaded[audio.AudioPath]
+                load = audio.Sound
                 channel = mixer.find_channel()
 
                 # Not sure if this actually works but if there are not enough channels to play a sound
@@ -183,8 +183,8 @@ class AudioEngine2D:
     def unpause(self, uuid: str):
         self.__to_unpause.append(uuid)
 
-    # removes song from list
-    def remove_song(self, uuid: str):
+    # Stops and removes the song based on its uuid
+    def stop(self, uuid: str):
         try:
             for audio in self.sounds.copy():
                 if uuid == audio.Uuid:
@@ -194,14 +194,8 @@ class AudioEngine2D:
         except ValueError:
             print(f"Could not find this audio")
 
-    # This function loads up the sound file and saves it for later use, saves audio to sounds so self.update can use it
-    def add(self, audio: Audio):
-        self.loaded[audio.AudioPath] = mixer.Sound(audio.AudioPath)
-        self.sounds.append(audio)
-
-    # This function just saves the provided mixer.Sound and saves the audio so self.update can use it
-    def add_preloaded(self, audio: Audio, sound: mixer.Sound):
-        self.loaded[audio.AudioPath] = sound
+    # Add the song to queue and play it if the Engine thread is running
+    def play(self, audio: Audio):
         self.sounds.append(audio)
 
     # This should not be relied upon because it searches through the AudioPath so it can find false things
